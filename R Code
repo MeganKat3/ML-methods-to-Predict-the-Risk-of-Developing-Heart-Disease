@@ -1,0 +1,106 @@
+library(randomForest)
+library(caret)
+library(ggplot2)
+library(splines)
+library(rpart)
+library(gbm)
+library(dplyr)
+
+
+Heart_clean<-read.csv("heart_2020_clean_SML.csv")
+
+#mutating new variable called "AgeCategory" in the "Heart_clean" dataset. 
+Heart_clean<-Heart_clean %>% 
+  mutate(AgeCategory=case_when(AgeCategory=="18-24"~21,
+                               AgeCategory=="25-29"~27,
+                               AgeCategory=="30-34"~32,
+                               AgeCategory=="35-39"~37,
+                               AgeCategory=="40-44"~42,
+                               AgeCategory=="45-49"~47,
+                               AgeCategory=="50-54"~52,
+                               AgeCategory=="55-59"~57,
+                               AgeCategory=="60-64"~62,
+                               AgeCategory=="65-69"~67,
+                               AgeCategory=="70-74"~72,
+                               AgeCategory=="75-79"~77,
+                               AgeCategory=="80 or older"~90,
+                            TRUE~NA
+                             ))
+
+#Grow and prune a classification tree with heart disease status as the response and the other variables as potential predictors.  
+#Use 10-fold CV accuracy with the one-SE rule to determine the optimal amount of pruning.  Use the Gini index for splitting nodes 
+#and set the minimum number of observations to split a node to 30 and the minimum number of observations in each terminal node to 10. 
+#Plot the classification tree and provide the 10-fold CV accuracy.    
+library(rpart.plot)
+
+# grow decision tree using gini 
+set.seed(1234)
+ctree_sahd_01 <- rpart(HeartDisease ~ ., data = Heart_clean, method = "class", parms = list(split = "gini"), 
+                        control = rpart.control(minsplit = 200, minbucket = 200), cp = 0)
+
+
+# get tuning grid for train function
+tg_clatr <- data.frame(cp = ctree_sahd_01$cptable[,1])
+
+# when training a classification tree using the train() function, make sure that the response is a factor variable
+heart_data_X <- Heart_clean[,2:18]
+heart_data_Y <- factor(Heart_clean$HeartDisease)
+
+# grow decision tree using 10-fold CV with one-SE rule
+set.seed(1234)
+ctree_sahd_10cv <- train(x = heart_data_X, y = heart_data_Y,
+                         method = "rpart", parms = list(split = "gini"),
+                         control = rpart.control(minsplit = 200, minbucket = 200),
+                         tuneGrid = tg_clatr,
+                         trControl = trainControl(method = "cv", number = 10, selectionFunction = "oneSE"))
+
+# print the 10-fold CV accuracy
+ctree_sahd_10cv$results$Accuracy
+cat("10-fold CV accuracy:", ctree_sahd_10cv$results[ctree_sahd_10cv$results$cp == ctree_sahd_10cv$bestTune$cp,]$Accuracy, "\n")
+#0.9125178 
+
+
+rpart.plot(ctree_sahd_10cv$finalModel)
+
+
+
+
+```
+10-fold CV accuracy: 0.9125178 
+
+
+
+random forest 
+```{r}
+
+set.seed(1234)
+
+
+#The "tuneGrid" input specifies a grid of hyperparameters to search through throughout the model tuning process."mtry" is being tweaked, 
+#and the grid contains values ranging from 1 to 7.
+
+rf_grid <- expand.grid(mtry = 1:7) #sequence of integers from 1 to 7
+rf_model <- train(HeartDisease ~ ., data = Heart_clean, 
+                  method = "rf", ntree =30,tuneGrid = rf_grid, 
+                  trControl = trainControl(method = "cv", number = 10),
+                  verboseIter = TRUE)
+
+
+
+
+
+# plot (plot of the out-of-bag (OOB) error rates of the final random forest model that was trained in the previous code above)
+plot(rf_model$finalModel$err.rate[, "OOB"], type = "b", xlab = "Number of Trees",
+     ylab = "OOB error rate",cex=0.8)
+
+
+# Calculate OOB accuracy
+oob_err_rate <- rf_model$finalModel$err.rate[nrow(rf_model$finalModel$err.rate), "OOB"]
+oob_acc <- 1 - oob_err_rate
+
+cat("OOB Accuracy:", oob_acc, "\n") 
+
+
+#varImpot 
+#varImpPlot(rf_model$finalModel,type=2,main="")
+varImpPlot(rf_model$finalModel, type = 2, main = "", cex.main = 6, cex.lab = 1)
