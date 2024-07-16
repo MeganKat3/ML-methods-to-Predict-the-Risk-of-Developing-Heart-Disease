@@ -1,5 +1,3 @@
-**ABSTRACT**
-
 
 This study aimed to develop a predictive model to determine whether an individual has heart disease or not based on personal key indicators. The machine learning methods used to determine these outcomes include decision trees, random forest, and gradient boosting. Based on the study, all three machine learning methods show high accuracy in detecting whether or not a person has heart disease based on personal key factors.
 
